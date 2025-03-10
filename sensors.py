@@ -68,6 +68,64 @@ class ObstacleSensor(object):
 
         return longitudinal, lateral
 
+class GnssSensor(object):
+    def __init__(self,world,parent_actor):
+        self._parent = parent_actor
+        self.lat = 0 #gnss传感器的经度信息
+        self.lon = 0 #gnss传感器的纬度信息
+        self.height = 0 #gnss传感器的高程信息
+        gnss_bp = world.get_blueprint_library().find('sensor.other.gnss')
+        gnss_bp.set_attribute('sensor_tick', '0.0')
+        self.sensor = world.spawn_actor(gnss_bp, carla.Transform(carla.Location(x=1.0, z=2.8)), attach_to=self._parent)
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda sensor_data: GnssSensor._gnss_callback(weak_self,sensor_data))
+    #gnss传感器的回调函数
+    @staticmethod
+    def _gnss_callback(weak_self, sensor_data):
+        self = weak_self()
+        self.lat= sensor_data.latitude
+        self.lon = sensor_data.longitude
+        self.height = sensor_data.altitude
+    
+    def get_gnss_data(self):
+        return [self.lat,self.lon,self.height]
+    
+class ImuSensor(object):
+    def __init__(self,world,parent_actor):
+        self._parent = parent_actor
+        self.liner_acceleration = 0 #线加速度矢量
+        self.acceleration_x = 0 #x轴加速度信息
+        self.acceleration_y = 0 #y轴加速度信息
+        self.acceleration_z = 0 #z轴加速度信息
+        self.angular_velocity = 0 #角速度矢量
+        self.angular_velocity_x = 0 #x轴角速度信息
+        self.angular_velocity_y = 0 #y轴角速度信息
+        self.angular_velocity_z = 0 #z轴角速度信息
+        imu_bp = world.get_blueprint_library().find('sensor.other.imu')
+        imu_bp.set_attribute('sensor_tick', '0.0')  #设置传感器的刷新频率
+        self.sensor = world.spawn_actor(imu_bp, carla.Transform(), attach_to=self._parent)  #将传感器绑定到车辆上
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda sensor_data: ImuSensor._imu_callback(weak_self, sensor_data))  #设置传感器的监听函数
+    #imu传感器的回调函数
+    @staticmethod
+    def _imu_callback(weak_self, sensor_data):
+        self = weak_self()
+        self.acceleration_x = sensor_data.accelerometer.x
+        self.acceleration_y = sensor_data.accelerometer.y
+        self.acceleration_z = sensor_data.accelerometer.z
+        self.angular_velocity_x = sensor_data.gyroscope.x
+        self.angular_velocity_y = sensor_data.gyroscope.y
+        self.angular_velocity_z = sensor_data.gyroscope.z
+        #将xyz数据转换为矢量
+        self.liner_acceleration = math.sqrt(self.acceleration_x**2+self.acceleration_y**2+self.acceleration_z**2)
+        self.angular_velocity = math.sqrt(self.angular_velocity_x**2+self.angular_velocity_y**2+self.angular_velocity_z**2)
+    
+    def get_imu_data(self):
+        return [[self.liner_acceleration,self.acceleration_x,self.acceleration_y,self.acceleration_z],
+                [self.angular_velocity,self.angular_velocity_x,self.angular_velocity_y,self.angular_velocity_z]]
+
+
+
             
 class LaneSensor():
     def __init__(self,world, parent_actor):

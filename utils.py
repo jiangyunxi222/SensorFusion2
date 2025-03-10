@@ -44,3 +44,34 @@ def pack_data(values):
         values["Lane2_Confidence"]
     )
     return data
+
+def pack_position_data(values):
+    """打包为协议报文（大端24个字段）"""
+    fmt = '>' + 'f' * 24
+    data = struct.pack(fmt,
+        values["timestamp"],
+        values["lon"],
+        values["lat"],
+        values["heigt"],
+        values["pitch"],
+        values["roll"],
+        values["heading"],
+        values["liner_velocity"],
+        values["velocity_x"],
+        values["velocity_y"],
+        values["velocity_z"],
+        values["liner_acceleration"],
+        values["acceleration_x"],
+        values["acceleration_y"],
+        values["acceleration_z"],
+        values["angular_velocity"],
+        values["angular_velocity_x"],
+        values["angular_velocity_y"],
+        values["angular_velocity_z"],
+        values["origin_lon"],
+        values["origin_lat"],
+        values["Utm_position_x"],
+        values["Utm_position_y"],
+        values["Utm_position_z"]
+    )
+    return data
