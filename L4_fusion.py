@@ -1,4 +1,4 @@
-from sensors import GnssSensor, ImuSensor
+from sensors import GnssSensor, ImuSensor, SemanticLidarSensor
 import math
 class L4Fusion():
     def __init__(self, world, vehicle):
@@ -7,9 +7,12 @@ class L4Fusion():
         #初始化传感器类
         self.gnss_sensor = GnssSensor(world,vehicle)
         self.imu_sensor = ImuSensor(world,vehicle)
+        self.semlidar_sensor = SemanticLidarSensor(world,vehicle)
 
         #公共字段
         self.timestamp = 0 #时间戳
+
+        ##################################################################################
     
         #定位数据0x01
         self.lon = 0 #经度
@@ -40,6 +43,31 @@ class L4Fusion():
         self.Utm_position_x = 0 #相对参考点x位置
         self.Utm_position_y = 0 #相对参考点y位置
         self.Utm_position_z = 0 #相对参考点y位置
+
+        ##################################################################################
+
+        #障碍物数据0x02
+        self.id = 0 #障碍物ID
+        self.Center_pos_vehicle_x = 0 #障碍物相对车辆x位置
+        self.Center_pos_vehicle_y = 0 #障碍物相对车辆y位置
+        self.Center_pos_vehicle_z = 0 #障碍物相对车辆z位置
+        self.Center_pos_abs_x  = 0 #障碍物绝对x位置
+        self.Center_pos_abs_y = 0 #障碍物绝对y位置
+        self.Center_pos_abs_z = 0 #障碍物绝对z位置
+        self.length = 0 #障碍物长度
+        self.width = 0 #障碍物宽度
+        self.height = 0 #障碍物高度
+        self.type = 0 #障碍物类型
+        self.confidence = 0 #障碍物置信度
+        self.Lane_position = 0 #障碍物在车道的位置
+        self.Fusion_type = 0 #融合类型
+        self.Cross_id = 0 #交叉口ID
+        self.Src_type = 0 #路段id
+        self.Lane_id = 0 #车道id
+        self.Lane_index =0 #车道序列号
+
+        ##################################################################################
+
 
     def get_position_data(self, ref_point = [[0,0],[0,0,0]]):
         #获取传感器数据
@@ -103,7 +131,80 @@ class L4Fusion():
             "Utm_position_x" : self.Utm_position_x,
             "Utm_position_y" : self.Utm_position_y,
             "Utm_position_z" : self.Utm_position_z
-            } 
+            }
+
+    def get_obstacle_data(self):
+        #获取传感器数据
+        if not self.semlidar_sensor.get_semantic_lidar_data():
+            return None
+        else:
+            obstacle_data = self.semlidar_sensor.get_semantic_lidar_data()
+            transform_data = self.vehicle.get_transform()
+
+            obstacle_num = len(obstacle_data[0]) #障碍物个数
+            obstacle_list = [] #障碍物数据列表初始化
+
+            self.timestamp = self.world.get_snapshot().timestamp.elapsed_seconds
+
+
+            for i in range(obstacle_num):
+
+                self.id = obstacle_data[4][i]
+                obstacle_actor = self.world.get_actor(self.id)
+                obstacle_waypoint = self.world.get_map().get_waypoint(obstacle_actor.get_location(), project_to_road=True)
+
+                self.Center_pos_vehicle_x = obstacle_data[0][i] - transform_data.location.x
+                self.Center_pos_vehicle_y = obstacle_data[1][i] - transform_data.location.y
+                self.Center_pos_vehicle_z = obstacle_data[2][i] - transform_data.location.z
+                self.Center_pos_abs_x = obstacle_data[0][i]
+                self.Center_pos_abs_y = obstacle_data[1][i]
+                self.Center_pos_abs_z = obstacle_data[2][i]
+                self.length = obstacle_actor.bounding_box.extent.x * 2
+                self.width = obstacle_actor.bounding_box.extent.y * 2
+                self.height = obstacle_actor.bounding_box.extent.z * 2
+                self.type = obstacle_data[3][i]
+                self.confidence = 1 #障碍物置信度没有提供具体公式，默认采用1
+                self.Fusion_type = 1 #融合类型没有提供具体方案，默认采用1
+                
+                self.Lane_id = obstacle_waypoint.lane_id
+                self.Lane_position = self.Lane_id - self.world.get_map().get_waypoint(self.vehicle.get_location(), project_to_road=True).lane_id
+                #Lane_index 具体含义有待确认，此处采用section_id
+                self.lane_index = obstacle_waypoint.section_id    
+
+                if obstacle_waypoint.is_junction:
+                    self.Cross_id = obstacle_waypoint.get_junction().id
+                else:
+                    self.Cross_id = -1
+                self.Src_type = obstacle_waypoint.road_id
+                
+                
+                
+                obstacle_list.append({
+                "timestamp" : self.timestamp,
+                "id" : self.id,
+                "Center_pos_vehicle_x" : self.Center_pos_vehicle_x,
+                "Center_pos_vehicle_y" : self.Center_pos_vehicle_y,
+                "Center_pos_vehicle_z" : self.Center_pos_vehicle_z,
+                "Center_pos_abs_x" : self.Center_pos_abs_x,
+                "Center_pos_abs_y" : self.Center_pos_abs_y,
+                "Center_pos_abs_z" : self.Center_pos_abs_z,
+                "length" : self.length,
+                "width" : self.width,
+                "height" : self.height,
+                "type" : self.type,
+                "confidence" : self.confidence,
+                "Lane_position" : self.Lane_position,
+                "Fusion_type" : self.Fusion_type,
+                "Cross_id" : self.Cross_id,
+                "Src_type" : self.Src_type,
+                "Lane_id" : self.Lane_id,
+                "lane_index" : self.lane_index
+                })
+
+            return obstacle_list
+
+
+
 
     
 

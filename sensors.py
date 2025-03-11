@@ -123,6 +123,105 @@ class ImuSensor(object):
     def get_imu_data(self):
         return [[self.liner_acceleration,self.acceleration_x,self.acceleration_y,self.acceleration_z],
                 [self.angular_velocity,self.angular_velocity_x,self.angular_velocity_y,self.angular_velocity_z]]
+    
+#语义点云雷达传感器
+class SemanticLidarSensor(object):
+    def __init__(self, world, parent_actor):
+        self._parent = parent_actor
+        self.sensor = None
+        self.obstacle_x = []
+        self.obstacle_y = []
+        self.obstacle_z = []
+        self.obstacle_type = []
+        self.obstacle_id = []
+
+        # 创建语义 LiDAR 传感器 blueprint
+        SemLidar_bp = world.get_blueprint_library().find('sensor.lidar.ray_cast_semantic')
+        SemLidar_bp.set_attribute('range', '50')  # 最大探测距离 50m
+        SemLidar_bp.set_attribute('rotation_frequency', '10')  # 旋转频率 10Hz
+        SemLidar_bp.set_attribute('channels', '32')  # LiDAR 通道数 32
+        SemLidar_bp.set_attribute('upper_fov', '10')  # 上视角 10°
+        SemLidar_bp.set_attribute('lower_fov', '-30')  # 下视角 -30°
+        SemLidar_bp.set_attribute('points_per_second', '100000')  # 每秒点数 100000
+        SemLidar_bp.set_attribute('sensor_tick', '0.0')  # 实时采样
+
+        # 传感器在车辆上的位置
+        lidar_transform = carla.Transform(carla.Location(x=1.0, z=2.8))
+        self.sensor = world.spawn_actor(SemLidar_bp, lidar_transform, attach_to=self._parent)
+
+        # 绑定回调函数
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda sensor_data: SemanticLidarSensor._semantic_lidar_callback(weak_self, sensor_data))
+
+    @staticmethod
+    def _semantic_lidar_callback(weak_self, sensor_data):
+        """语义 LiDAR 数据回调函数，解析点云数据"""
+        self = weak_self()
+        
+        # 0	    未知（Unknown）
+        # 1	    建筑（Buildings）
+        # 2	    道路（Fences）
+        # 3	    其他（Other）
+        # 4	    道路（Poles）
+        # 5	    道路标志（RoadLines）
+        # 6	    人行道（Roads）
+        # 7	    人行道（Sidewalks）
+        # 8	    路灯（Vegetation）
+        # 9	    树木（Vegetation）
+        # 10	墙壁（Walls）
+        # 11	交通标志（TrafficSigns）
+        # 12	路缘石（Curb）
+        # 13	车辆（Vehicles）
+        # 14	行人（Pedestrians）
+        # 15	自行车（Bicycles）
+        # 16	交通信号灯（TrafficLights）
+        # 17	地面（Ground）
+        ALLOWED_CLASS_IDS = {13}  # 自行根据需求替换实际 ID
+        point_dtype = np.dtype([
+        ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+        ('cos_incidence', 'f4'),
+        ('object_id', 'i4'),
+        ('class_id', 'u1'),
+        ('pad1', 'u1'),
+        ('pad2', 'u1'),
+        ('pad3', 'u1')
+])
+
+        # 解析点云数据
+        point_cloud = np.frombuffer(sensor_data.raw_data, dtype=point_dtype)
+
+        # 清空之前存储的数据
+        self.obstacle_x.clear()
+        self.obstacle_y.clear()
+        self.obstacle_z.clear()
+        self.obstacle_type.clear()
+        self.obstacle_id.clear()
+
+        # 仅保留 ALLOWED_CLASS_IDS 对应的点
+        for point in point_cloud:
+            if point['class_id'] in ALLOWED_CLASS_IDS:
+                self.obstacle_x.append(float(point['x']))
+                self.obstacle_y.append(float(point['y']))
+                self.obstacle_z.append(float(point['z']))
+                self.obstacle_type.append(int(point['class_id']))
+                self.obstacle_id.append(int(point['object_id']))
+
+        print(f"Detected {len(self.obstacle_x)} points (filtered) from semantic LiDAR.")
+
+
+
+    def get_semantic_lidar_data(self):
+        #列表为空时返回None
+        if not self.obstacle_x:
+            return None
+        else:
+            return [self.obstacle_x, self.obstacle_y, self.obstacle_z,
+                    self.obstacle_type, self.obstacle_id]
+
+
+        
+
+
 
 
 

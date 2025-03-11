@@ -52,7 +52,9 @@ def main():
             start_time = time.time() 
             world.tick()
             position_data = L4_fusion.get_position_data()
+            obstacle_data_list = L4_fusion.get_obstacle_data()
             print(position_data)
+            print(obstacle_data_list)
             
             packet_data = pack_position_data(position_data)
             sock.sendto(packet_data, (UDP_IP, UDP_PORT))
